@@ -36,7 +36,7 @@
             .breadcrumb {
                 padding: 10px 15px;
                 background: #f1f3f5;
-                font-size: 13px;
+                font-family: Consolas, "Lucida Console", Monaco, monospace;
                 color: #666;
                 border-bottom: 1px solid #eee;
             }
@@ -57,7 +57,7 @@
                 text-align: center;
             }
             .folder {
-                color: #0066cc;
+                color: #000000;
                 font-weight: 500;
             }
             .file {
@@ -68,6 +68,9 @@
                 padding: 40px;
                 text-align: center;
                 color: #999;
+            }
+            .navigable {
+                cursor: pointer;
             }
         </style>
     </head>
@@ -106,6 +109,9 @@
                     <option value="doi:10.18739/A2W37KX40">
                         doi:10.18739/A2W37KX40
                     </option>
+                    <option value="doi:10.18739/A2H70820F">
+                        doi:10.18739/A2H70820F
+                    </option>
                 </select>
             </div>
             <div class="breadcrumb" id="path-display">
@@ -139,6 +145,32 @@
                 return { pid, path_parts };
             }
 
+            function pathDisplay(pid, path) {
+                pathElement.innerHTML = "";
+                const ele = document.createElement("span");
+                ele.innerHTML = `${pid} `;
+                if (path.length > 0) {
+                    ele.className = "navigable";
+                    ele.onclick = () => {
+                        loadFolder(pid, []);
+                    };
+                }
+                pathElement.appendChild(ele);
+                path.forEach((p, i) => {
+                    const e = document.createElement("span");
+                    if (i < path.length - 1) {
+                        e.className = "navigable";
+                        e.innerHTML = `${p}/`;
+                        e.onclick = () => {
+                            loadFolder(pid, path.slice(0, i + 1));
+                        };
+                    } else {
+                        e.innerHTML = p;
+                    }
+                    pathElement.appendChild(e);
+                });
+            }
+
             async function loadFolder(pid, path = []) {
                 const url = composeUrl(pid, path);
                 console.log(
@@ -147,7 +179,8 @@
 
                 listElement.innerHTML =
                     '<div class="loading">Parsing Parquet with hyparquet...</div>';
-                pathElement.textContent = `Current Folder: ${pid} ${path.join("/")}`;
+                //pathElement.textContent = `${pid} ${path.join("/")}`;
+                pathDisplay(pid, path);
 
                 try {
                     const file = await asyncBufferFromUrl({ url });
@@ -197,7 +230,7 @@
 
             function render(entries, currentPid, currentPath) {
                 listElement.innerHTML = "";
-
+                /*
                 if (currentPath.length > 0) {
                     const back = document.createElement("div");
                     back.className = "entry folder";
@@ -207,6 +240,7 @@
                     };
                     listElement.appendChild(back);
                 }
+                */
 
                 entries.forEach((entry) => {
                     const div = document.createElement("div");

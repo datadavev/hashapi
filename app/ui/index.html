@@ -72,6 +72,12 @@
             .navigable {
                 cursor: pointer;
             }
+            .filesize {
+                font-family: Consolas, "Lucida Console", Monaco, monospace;
+                font-size: smaller;
+                display: inline-block;
+                padding-left: 20px;
+            }
         </style>
     </head>
     <body>
@@ -262,9 +268,9 @@
                     const isFolder = entry.type === 0;
                     div.className = `entry ${isFolder ? "folder" : "file"}`;
                     if (isFolder) {
-                        div.innerHTML = `<span class="icon">📁</span> ${entry.name} (${entry.size})`;
+                        div.innerHTML = `<span class="icon">📁</span> ${entry.name} <span class="filesize">${entry.size} entries</span>`;
                     } else {
-                        div.innerHTML = `<span class="icon">📄</span><a target="_blank" href="${makeItemUrl(currentPid, currentPath, entry.name)}">${entry.name} (${formatBytes(Number(entry.size))})</a>`;
+                        div.innerHTML = `<span class="icon">📄</span><a target="_blank" href="${makeItemUrl(currentPid, currentPath, entry.name)}">${entry.name}</a><span class="filesize">${formatBytes(Number(entry.size))}</span>`;
                         stats.bytes = stats.bytes + Number(entry.size);
                     }
 

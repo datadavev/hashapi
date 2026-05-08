@@ -1,0 +1,33 @@
+services:
+  fastapi:
+    build: .
+    container_name: fastapi_app
+    volumes:
+      - ./app:/app
+      - ./data:/var/data
+      #- ./data/hashstore/objects:/var/data/hashstore/objects # Shared volume for XSendFile
+    restart: always
+
+  apache:
+    image: httpd:2.4
+    container_name: apache_proxy
+    environment:
+      - APACHE_LOG_DIR=/usr/local/apache2/logs
+    ports:
+      - "2011:80"
+    volumes:
+      - ./apache/vhost.conf:/usr/local/apache2/conf/extra/httpd-vhosts.conf
+      - ./data/hashstore:/var/data/hashstore
+      - ./logs/apache:/usr/local/apache2/logs
+    entrypoint: /bin/sh -c "
+      apt-get update &&
+      apt-get install -y libapache2-mod-xsendfile &&
+      sed -i 's|#LoadModule headers_module|LoadModule headers_module|' /usr/local/apache2/conf/httpd.conf &&
+      sed -i 's|#LoadModule rewrite_module|LoadModule rewrite_module|' /usr/local/apache2/conf/httpd.conf &&
+      sed -i 's|#LoadModule proxy_module|LoadModule proxy_module|' /usr/local/apache2/conf/httpd.conf &&
+      sed -i 's|#LoadModule proxy_http_module|LoadModule proxy_http_module|' /usr/local/apache2/conf/httpd.conf &&
+      sed -i 's|#Include conf/extra/httpd-vhosts.conf|Include conf/extra/httpd-vhosts.conf|' /usr/local/apache2/conf/httpd.conf &&
+      echo 'LoadModule xsendfile_module /usr/lib/apache2/modules/mod_xsendfile.so' >> /usr/local/apache2/conf/httpd.conf &&
+      httpd-foreground"
+    depends_on:
+      - fastapi

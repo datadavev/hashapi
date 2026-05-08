@@ -117,6 +117,7 @@
             <div class="breadcrumb" id="path-display">
                 Select a source to begin
             </div>
+            <div class="breadcrumb" id="folder-stats"></div>
             <div id="file-list"></div>
         </div>
 
@@ -131,6 +132,7 @@
             const selector = document.getElementById("root-selector");
             const listElement = document.getElementById("file-list");
             const pathElement = document.getElementById("path-display");
+            const statsElement = document.getElementById("folder-stats");
 
             function composeUrl(pid, path_parts) {
                 const path = path_parts.join("/");
@@ -169,6 +171,19 @@
                     }
                     pathElement.appendChild(e);
                 });
+            }
+
+            function formatBytes(bytes) {
+                if (!bytes) return "0 B";
+                const k = 1024;
+                const sizes = ["B", "KB", "MB", "GB", "TB"];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                // Now that 'bytes' is a Number, toFixed() works perfectly
+                return (
+                    parseFloat((bytes / Math.pow(k, i)).toFixed(2)) +
+                    " " +
+                    sizes[i]
+                );
             }
 
             async function loadFolder(pid, path = []) {
@@ -241,7 +256,7 @@
                     listElement.appendChild(back);
                 }
                 */
-
+                const stats = { entries: entries.length, bytes: 0 };
                 entries.forEach((entry) => {
                     const div = document.createElement("div");
                     const isFolder = entry.type === 0;
@@ -249,7 +264,8 @@
                     if (isFolder) {
                         div.innerHTML = `<span class="icon">📁</span> ${entry.name} (${entry.size})`;
                     } else {
-                        div.innerHTML = `<span class="icon">📄</span><a target="_blank" href="${makeItemUrl(currentPid, currentPath, entry.name)}">${entry.name} (${entry.size})</a>`;
+                        div.innerHTML = `<span class="icon">📄</span><a target="_blank" href="${makeItemUrl(currentPid, currentPath, entry.name)}">${entry.name} (${formatBytes(Number(entry.size))})</a>`;
+                        stats.bytes = stats.bytes + Number(entry.size);
                     }
 
                     if (isFolder) {
@@ -262,6 +278,7 @@
                     }
                     listElement.appendChild(div);
                 });
+                statsElement.innerHTML = `${stats.entries} entries ${formatBytes(stats.bytes)}`;
             }
 
             selector.onchange = () => {

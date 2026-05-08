@@ -5,7 +5,6 @@ services:
     volumes:
       - ./app:/app
       - ./data:/var/data
-      #- ./data/hashstore/objects:/var/data/hashstore/objects # Shared volume for XSendFile
     restart: always
 
   apache:

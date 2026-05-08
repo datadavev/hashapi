@@ -12,8 +12,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-#COPY hashstore /hashstore
-
 # Install dependencies first for caching
 COPY app/pyproject.toml app/uv.lock .
 RUN uv sync --frozen

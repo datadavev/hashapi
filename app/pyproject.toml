@@ -1,0 +1,15 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.136.1",
+    "hashstore",
+    "pyarrow>=24.0.0",
+    "python-magic>=0.4.27",
+]
+
+[tool.uv.sources]
+hashstore = { git = "https://github.com/Dataoneorg/hashstore", branch = "feat-152_folder_store" }

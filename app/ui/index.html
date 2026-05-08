@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Hashstore Folder Browser</title>
+        <style>
+            body {
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                padding: 20px;
+                background: #f8f9fa;
+            }
+            #browser {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .controls {
+                padding: 15px;
+                border-bottom: 1px solid #eee;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+            select {
+                flex-grow: 1;
+                padding: 8px;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+            }
+            .breadcrumb {
+                padding: 10px 15px;
+                background: #f1f3f5;
+                font-size: 13px;
+                color: #666;
+                border-bottom: 1px solid #eee;
+            }
+            .entry {
+                padding: 12px 15px;
+                border-bottom: 1px solid #f1f1f1;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                transition: background 0.1s;
+            }
+            .entry:hover {
+                background: #f8fbff;
+            }
+            .icon {
+                margin-right: 12px;
+                width: 20px;
+                text-align: center;
+            }
+            .folder {
+                color: #0066cc;
+                font-weight: 500;
+            }
+            .file {
+                color: #444;
+                cursor: default;
+            }
+            .loading {
+                padding: 40px;
+                text-align: center;
+                color: #999;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="browser">
+            <div class="controls">
+                <label for="root-selector"><strong>Source:</strong></label>
+                <select id="root-selector">
+                    <option value="doi:10.18739/A2BZ61B03">
+                        doi:10.18739/A2BZ61B03
+                    </option>
+                    <option value="doi:10.18739/A2B27PT14">
+                        doi:10.18739/A2B27PT14
+                    </option>
+                    <option value="doi:10.18739/A2B853K56">
+                        doi:10.18739/A2B853K56
+                    </option>
+                    <option value="doi:10.18739/A2B853K8N">
+                        doi:10.18739/A2B853K8N
+                    </option>
+                    <option value="doi:10.18739/A2BK16R77">
+                        doi:10.18739/A2BK16R77
+                    </option>
+                    <option value="doi:10.18739/A2CZ32678">
+                        doi:10.18739/A2CZ32678
+                    </option>
+                    <option value="doi:10.18739/A2D795D05">
+                        doi:10.18739/A2D795D05
+                    </option>
+                    <option value="doi:10.18739/A2GH9BB4N">
+                        doi:10.18739/A2GH9BB4N
+                    </option>
+                    <option value="doi:10.18739/A2251FM9P">
+                        doi:10.18739/A2251FM9P
+                    </option>
+                    <option value="doi:10.18739/A2W37KX40">
+                        doi:10.18739/A2W37KX40
+                    </option>
+                </select>
+            </div>
+            <div class="breadcrumb" id="path-display">
+                Select a source to begin
+            </div>
+            <div id="file-list"></div>
+        </div>
+
+        <script type="module">
+            // Using hyparquet via ESM CDN
+            import {
+                parquetRead,
+                asyncBufferFromUrl,
+            } from "https://cdn.jsdelivr.net/npm/hyparquet@1.25.6/+esm";
+
+            const BASE_URL = `http://localhost:2011/v1/object/`;
+            const selector = document.getElementById("root-selector");
+            const listElement = document.getElementById("file-list");
+            const pathElement = document.getElementById("path-display");
+
+            function composeUrl(pid, path_parts) {
+                const path = path_parts.join("/");
+                if (path === "") return `${BASE_URL}${pid}`;
+                else return `${BASE_URL}${pid}%20${path}`;
+            }
+
+            function splitUrl(url) {
+                const parts = url.split("%20");
+                const pid = parts[0];
+                const path_parts = parts.slice(1).join("%20").split("/");
+                return { pid, path_parts };
+            }
+
+            async function loadFolder(pid, path = []) {
+                const url = composeUrl(pid, path);
+                console.log(
+                    `loadFolder: ${url} | PID: ${pid} | Path: ${path.join("/")}`,
+                );
+
+                listElement.innerHTML =
+                    '<div class="loading">Parsing Parquet with hyparquet...</div>';
+                pathElement.textContent = `Current Folder: ${pid} ${path.join("/")}`;
+
+                try {
+                    const file = await asyncBufferFromUrl({ url });
+                    const entries = [];
+                    await parquetRead({
+                        file,
+                        columns: ["name", "type", "size"],
+                        rowFormat: "object",
+                        onComplete: (rows) => {
+                            // rows is an array of objects: [{name: '...', type: 0}, ...]
+                            const processedRows = rows.map((r) => ({
+                                name: r.name,
+                                type: parseInt(r.type, 10), // 0 for folder, 1 for file
+                                size: r.size,
+                            }));
+                            entries.push(...processedRows);
+                        },
+                    });
+
+                    // Sort: Folders (0) first, then Files (1)
+                    entries.sort(
+                        (a, b) =>
+                            a.type - b.type || a.name.localeCompare(b.name),
+                    );
+
+                    render(entries, pid, path);
+                } catch (e) {
+                    listElement.innerHTML = `<div class="loading" style="color:red">Error: ${e.message}</div>`;
+                }
+            }
+
+            function makeItemUrl(pid, path, name) {
+                const target = composeUrl(pid, [...path, name]);
+                if (name.endsWith(".parquet")) {
+                    /*
+                    const url = new URL(
+                        "https://hyparam.github.io/demos/hyparquet/",
+                    );
+                    url.searchParams.set("key", target);
+                    */
+                    const url = new URL("https://manzt.github.io/quak/");
+                    url.searchParams.set("source", target);
+                    return url.toString();
+                }
+                return target;
+            }
+
+            function render(entries, currentPid, currentPath) {
+                listElement.innerHTML = "";
+
+                if (currentPath.length > 0) {
+                    const back = document.createElement("div");
+                    back.className = "entry folder";
+                    back.innerHTML = `<span class="icon">⤴</span> .. (Back)`;
+                    back.onclick = () => {
+                        loadFolder(currentPid, currentPath.slice(0, -1));
+                    };
+                    listElement.appendChild(back);
+                }
+
+                entries.forEach((entry) => {
+                    const div = document.createElement("div");
+                    const isFolder = entry.type === 0;
+                    div.className = `entry ${isFolder ? "folder" : "file"}`;
+                    if (isFolder) {
+                        div.innerHTML = `<span class="icon">📁</span> ${entry.name} (${entry.size})`;
+                    } else {
+                        div.innerHTML = `<span class="icon">📄</span><a target="_blank" href="${makeItemUrl(currentPid, currentPath, entry.name)}">${entry.name} (${entry.size})</a>`;
+                    }
+
+                    if (isFolder) {
+                        div.onclick = () => {
+                            loadFolder(currentPid, [
+                                ...currentPath,
+                                entry.name,
+                            ]);
+                        };
+                    }
+                    listElement.appendChild(div);
+                });
+            }
+
+            selector.onchange = () => {
+                loadFolder(selector.value, []);
+            };
+
+            // Initial load
+            loadFolder(selector.value, []);
+        </script>
+    </body>
+</html>

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 import api_v1.api
 
@@ -19,6 +20,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="hashapi", lifespan=lifespan)
 
 app.include_router(api_v1.api.router, prefix="/v1")
+
+app.mount("/ui", StaticFiles(directory="ui"), name="ui")
 
 
 @app.get("/")

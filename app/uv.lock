@@ -263,7 +263,7 @@ wheels = [
 [[package]]
 name = "hashstore"
 version = "1.2.0"
-source = { git = "https://github.com/Dataoneorg/hashstore?branch=feat-152_folder_store#b1403b3f61832997089199daedffef5cc6eb3292" }
+source = { git = "https://github.com/Dataoneorg/hashstore?branch=feat-152_folder_store#8c2a67346497fe542457e0f0132d2c44c4c4fe6d" }
 dependencies = [
     { name = "click" },
     { name = "pathlib" },

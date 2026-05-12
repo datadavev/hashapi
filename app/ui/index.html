@@ -41,7 +41,7 @@
                 border-bottom: 1px solid #eee;
             }
             .entry {
-                padding: 12px 15px;
+                padding: 6px 8px;
                 border-bottom: 1px solid #f1f1f1;
                 cursor: pointer;
                 display: flex;
@@ -101,7 +101,7 @@
                 asyncBufferFromUrl,
             } from "https://cdn.jsdelivr.net/npm/hyparquet@1.25.6/+esm";
 
-            const delim = "→";
+            const delim = "|";
             const BASE_URL = `http://localhost:2011/v1/object/`;
             const selector = document.getElementById("root-selector");
             const listElement = document.getElementById("file-list");
@@ -113,6 +113,12 @@
                     "doi:10.18739/A2B853K56",
                     "doi:10.18739/A2B27PT14",
                     "root_1",
+                    "doi:10.18739/A2B853K8N",
+                    "doi:10.18739/A2BK16R77",
+                    "doi:10.18739/A2BZ61B03",
+                    "root_2",
+                    //"doi:10.18739/A2CJ87N8D",
+                    //"doi:10.18739/A2CV4BS5K",
                 ];
             }
 
@@ -130,13 +136,13 @@
             function composeUrl(pid, path_parts) {
                 const path = path_parts.join(delim);
                 if (path === "") return `${BASE_URL}${pid}`;
-                else return `${BASE_URL}${pid}%20${path}`;
+                else return `${BASE_URL}${pid}${delim}${path}`;
             }
 
             function splitUrl(url) {
-                const parts = url.split("%20");
+                const parts = url.split(delim);
                 const pid = parts[0];
-                const path_parts = parts.slice(1).join("%20").split(delim);
+                const path_parts = parts.slice(1).join(delim).split(delim);
                 return { pid, path_parts };
             }
 
@@ -203,7 +209,7 @@
                                 ) {
                                     metadata = JSON.parse(value);
                                     metadata.pathpath = metadata.pid;
-                                    metadata.pid = metadata.pid.split(" ")[0];
+                                    metadata.pid = metadata.pid.split("⫽")[0];
                                 }
                             },
                         );
@@ -239,6 +245,15 @@
                 } catch (e) {
                     listElement.innerHTML = `<div class="loading" style="color:red">Error: ${e.message}</div>`;
                 }
+            }
+
+            function folerInspectionUrl(pid, path) {
+                const target = composeUrl(pid, path);
+                const url = new URL(
+                    "https://hyparam.github.io/demos/hyparquet/",
+                );
+                url.searchParams.set("key", target);
+                return url.toString();
             }
 
             function makeItemUrl(pid, path, name) {
@@ -291,7 +306,7 @@
                     }
                     listElement.appendChild(div);
                 });
-                statsElement.innerHTML = `${stats.entries} entries ${formatBytes(stats.bytes)}`;
+                statsElement.innerHTML = `${stats.entries} entries ${formatBytes(stats.bytes)}  <a target="_blank" href="${folerInspectionUrl(currentPid, currentPath)}">ⓘ<a>`;
             }
 
             selector.onchange = () => {

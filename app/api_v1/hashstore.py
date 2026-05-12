@@ -5,6 +5,7 @@ import pathlib
 
 import hashstore
 import hashstore.filehashstore_exceptions
+import hashstore.folderentry
 import magic
 import pyarrow.parquet
 import yaml
@@ -66,17 +67,42 @@ def get_hashstore(request: Request):
     return request.app.state.hashstore
 
 
-def split_pid(pid: str) -> tuple[str, str, str]:
+def split_pid(pid: str) -> tuple[str, list[str], str]:
     pid = pid.strip()
     parts = pid.split(" ", 1)
     path = ""
+    path_parts = []
     if len(parts) > 1:
         path = parts[1].strip()
-        if path in ("", ".", "/"):
+        if path in ("", ".", hashstore.folderentry.PATH_DELIMITER):
             path = ""
+        path_parts = path.split(hashstore.folderentry.PATH_DELIMITER)
     pid = parts[0]
     folder_pid = f"{pid} {path}" if path != "" else pid
-    return (pid, path, folder_pid)
+    return (pid, path_parts, folder_pid)
+
+
+def resolve_pidpath(hs: hashstore.HashStore, pid: str, path: list[str]):
+    pathpid = pid
+    if len(path) > 0:
+        pathpid = f"{pid} {hashstore.folderentry.PATH_DELIMITER.join(path)}"
+    # First try grabbing the full path.
+    try:
+        print(f"TRY 1 {pathpid}")
+        return hs.find_object(pathpid)
+    except hashstore.filehashstore_exceptions.PidRefsDoesNotExist:
+        pass
+    try:
+        print(f"TRY 2 {pathpid}")
+        return hs.find_object(path[0])
+    except hashstore.filehashstore_exceptions.PidRefsDoesNotExist:
+        pass
+    if len(path) == 0:
+        raise hashstore.filehashstore_exceptions.PidRefsDoesNotExist(
+            f"Unable to resolve {pathpid}"
+        )
+    print(f"TRY 3 {pathpid}")
+    return resolve_pidpath(hs, path[0], path[1:])
 
 
 @router.get("/info/{pid:path}")
@@ -107,7 +133,7 @@ async def system_metadata(pid: str, hs=Depends(get_hashstore)):
     object_info_dict = hs.find_object(folder_pid)
     sys_meta_path = object_info_dict.get("sysmeta_path")
     if sys_meta_path in [None, "Does not exist."]:
-        object_info_dict = hs._find_object(pid)
+        object_info_dict = hs.find_object(pid)
         sys_meta_path = object_info_dict.get("sysmeta_path")
         if sys_meta_path in [None, "Does not exist."]:
             raise HTTPException(
@@ -131,9 +157,12 @@ async def download_file(pid: str, hs=Depends(get_hashstore)):
     """
     # Instead of returning the file, we tell Apache where it is
     pid, path, folder_pid = split_pid(pid)
-    object_info_dict = hs.find_object(folder_pid)
+    object_info_dict = resolve_pidpath(hs, pid, path)
     object_path = object_info_dict.get("cid_object_path")
-    media_type = get_media_type(object_path)
+    if isinstance(object_path, str):
+        media_type = get_media_type(object_path)
+    else:
+        media_type = ""
 
     if media_type == "application/json":
         # peek at the file. If it's a proxy file, then

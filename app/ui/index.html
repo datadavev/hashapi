@@ -84,41 +84,7 @@
         <div id="browser">
             <div class="controls">
                 <label for="root-selector"><strong>Source:</strong></label>
-                <select id="root-selector">
-                    <option value="doi:10.18739/A2BZ61B03">
-                        doi:10.18739/A2BZ61B03
-                    </option>
-                    <option value="doi:10.18739/A2B27PT14">
-                        doi:10.18739/A2B27PT14
-                    </option>
-                    <option value="doi:10.18739/A2B853K56">
-                        doi:10.18739/A2B853K56
-                    </option>
-                    <option value="doi:10.18739/A2B853K8N">
-                        doi:10.18739/A2B853K8N
-                    </option>
-                    <option value="doi:10.18739/A2BK16R77">
-                        doi:10.18739/A2BK16R77
-                    </option>
-                    <option value="doi:10.18739/A2CZ32678">
-                        doi:10.18739/A2CZ32678
-                    </option>
-                    <option value="doi:10.18739/A2D795D05">
-                        doi:10.18739/A2D795D05
-                    </option>
-                    <option value="doi:10.18739/A2GH9BB4N">
-                        doi:10.18739/A2GH9BB4N
-                    </option>
-                    <option value="doi:10.18739/A2251FM9P">
-                        doi:10.18739/A2251FM9P
-                    </option>
-                    <option value="doi:10.18739/A2W37KX40">
-                        doi:10.18739/A2W37KX40
-                    </option>
-                    <option value="doi:10.18739/A2H70820F">
-                        doi:10.18739/A2H70820F
-                    </option>
-                </select>
+                <select id="root-selector"></select>
             </div>
             <div class="breadcrumb" id="path-display">
                 Select a source to begin
@@ -131,17 +97,38 @@
             // Using hyparquet via ESM CDN
             import {
                 parquetRead,
+                parquetMetadataAsync,
                 asyncBufferFromUrl,
             } from "https://cdn.jsdelivr.net/npm/hyparquet@1.25.6/+esm";
 
+            const delim = "→";
             const BASE_URL = `http://localhost:2011/v1/object/`;
             const selector = document.getElementById("root-selector");
             const listElement = document.getElementById("file-list");
             const pathElement = document.getElementById("path-display");
             const statsElement = document.getElementById("folder-stats");
 
+            async function loadRootPidList() {
+                return [
+                    "doi:10.18739/A2B853K56",
+                    "doi:10.18739/A2B27PT14",
+                    "root_1",
+                ];
+            }
+
+            async function buildPidSelection() {
+                const pids = await loadRootPidList();
+                selector.innerHTML = "";
+                pids.forEach((pid) => {
+                    const o = document.createElement("option");
+                    o.value = pid;
+                    o.innerHTML = pid;
+                    selector.appendChild(o);
+                });
+            }
+
             function composeUrl(pid, path_parts) {
-                const path = path_parts.join("/");
+                const path = path_parts.join(delim);
                 if (path === "") return `${BASE_URL}${pid}`;
                 else return `${BASE_URL}${pid}%20${path}`;
             }
@@ -149,7 +136,7 @@
             function splitUrl(url) {
                 const parts = url.split("%20");
                 const pid = parts[0];
-                const path_parts = parts.slice(1).join("%20").split("/");
+                const path_parts = parts.slice(1).join("%20").split(delim);
                 return { pid, path_parts };
             }
 
@@ -168,7 +155,7 @@
                     const e = document.createElement("span");
                     if (i < path.length - 1) {
                         e.className = "navigable";
-                        e.innerHTML = `${p}/`;
+                        e.innerHTML = `${p}${delim}`;
                         e.onclick = () => {
                             loadFolder(pid, path.slice(0, i + 1));
                         };
@@ -205,16 +192,36 @@
 
                 try {
                     const file = await asyncBufferFromUrl({ url });
+                    const pqmetadata = await parquetMetadataAsync(file);
+                    let metadata = {};
+                    if (pqmetadata.key_value_metadata) {
+                        pqmetadata.key_value_metadata.forEach(
+                            ({ key, value }) => {
+                                if (
+                                    key ==
+                                    "https://ns.dataone.org/types/FolderEntries"
+                                ) {
+                                    metadata = JSON.parse(value);
+                                    metadata.pathpath = metadata.pid;
+                                    metadata.pid = metadata.pid.split(" ")[0];
+                                }
+                            },
+                        );
+                    }
+                    console.log(metadata);
+                    if (metadata.pid !== pid) {
+                        return loadFolder(metadata.pid);
+                    }
                     const entries = [];
                     await parquetRead({
                         file,
-                        columns: ["name", "type", "size"],
+                        columns: ["name", "is_file", "size"],
                         rowFormat: "object",
                         onComplete: (rows) => {
                             // rows is an array of objects: [{name: '...', type: 0}, ...]
                             const processedRows = rows.map((r) => ({
                                 name: r.name,
-                                type: parseInt(r.type, 10), // 0 for folder, 1 for file
+                                is_file: r.is_file,
                                 size: r.size,
                             }));
                             entries.push(...processedRows);
@@ -224,7 +231,8 @@
                     // Sort: Folders (0) first, then Files (1)
                     entries.sort(
                         (a, b) =>
-                            a.type - b.type || a.name.localeCompare(b.name),
+                            a.is_file - b.is_file ||
+                            a.name.localeCompare(b.name),
                     );
 
                     render(entries, pid, path);
@@ -265,16 +273,15 @@
                 const stats = { entries: entries.length, bytes: 0 };
                 entries.forEach((entry) => {
                     const div = document.createElement("div");
-                    const isFolder = entry.type === 0;
-                    div.className = `entry ${isFolder ? "folder" : "file"}`;
-                    if (isFolder) {
+                    div.className = `entry ${entry.is_file ? "file" : "folder"}`;
+                    if (!entry.is_file) {
                         div.innerHTML = `<span class="icon">📁</span> ${entry.name} <span class="filesize">${entry.size} entries</span>`;
                     } else {
                         div.innerHTML = `<span class="icon">📄</span><a target="_blank" href="${makeItemUrl(currentPid, currentPath, entry.name)}">${entry.name}</a><span class="filesize">${formatBytes(Number(entry.size))}</span>`;
                         stats.bytes = stats.bytes + Number(entry.size);
                     }
 
-                    if (isFolder) {
+                    if (!entry.is_file) {
                         div.onclick = () => {
                             loadFolder(currentPid, [
                                 ...currentPath,
@@ -292,6 +299,7 @@
             };
 
             // Initial load
+            await buildPidSelection();
             loadFolder(selector.value, []);
         </script>
     </body>
